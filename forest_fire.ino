@@ -7,7 +7,7 @@
 #define CLK_PIN   13      // Clock pin to communicate with display
 #define DATA_PIN  11      // Data pin to communicate with display
 #define CS_PIN    3       // Control pin to communicate with display
-#define DEBUG 1
+#define DEBUG 0
 
 // potentiometer
 #define POT A2
@@ -94,7 +94,7 @@ void loop() {
   //  delay(val);
 
   // enable for hard coded speed
-  delay(1000);
+  delay(80);
   if (DEBUG) printBoard();
   displayBoard(board);
   forestFire();
@@ -145,6 +145,8 @@ void forestFire() {
       else if (board[y][x] == TREE) {
         // if any cell neighbor is on fire
         int onFire = neighborsOnFire(y, x);
+        Serial.print("onFire ---> ");
+        Serial.println(onFire);
         if (onFire) {
           nextBoard[y][x] = BURNING;
           if (DEBUG) Serial.println("TREE --> BURNING");
@@ -175,7 +177,7 @@ void forestFire() {
     }
   }
   // update the board
-    copyBoard(nextBoard, board);
+  copyBoard(nextBoard, board);
 }
 
 
@@ -223,7 +225,6 @@ void flashBoard(int times) {
   }
 }
 
-// TODO this almost works, but fails to return correct count
 int neighborsOnFire(int y, int x) {
   int count = 0;
   // perp and vertical
@@ -232,7 +233,7 @@ int neighborsOnFire(int y, int x) {
       // don't count self
       if (i == 0 && j == 0) continue;
       // else if neighbor on fire, return true
-      if (board[j][i] == BURNING) {
+      if (board[j + y][i + x] == BURNING) {
         return 1;
       }
     }
