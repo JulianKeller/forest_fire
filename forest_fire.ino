@@ -7,7 +7,7 @@
 #define CLK_PIN   13      // Clock pin to communicate with display
 #define DATA_PIN  11      // Data pin to communicate with display
 #define CS_PIN    3       // Control pin to communicate with display
-#define DEBUG 0
+#define DEBUG 1
 
 // potentiometer
 #define POT A2
@@ -76,9 +76,14 @@ void setup() {
   randomSeed(analogRead(1));
 
   //  initBoard(board, 1);
-  random_init_board(board, 10);
+  int totalGridSize = MAX_X * MAX_Y;
+  int treesToPlant = totalGridSize / 4;
+  random_init_board(board, treesToPlant, TREE);
   displayBoard(board);
+  //  set_random_point_near_neighbor(TREE, 3);
+  delay(1500);
   flashBoard(3);
+
 }
 
 
@@ -89,41 +94,16 @@ void loop() {
   //  delay(val);
 
   // enable for hard coded speed
-  delay(80);
-  //  printBoard();
+  delay(1000);
+  if (DEBUG) printBoard();
   displayBoard(board);
   forestFire();
 
 }
 
-
+// TODO some problem where the game stops working and freezes. Prob memory leak or something
 void forestFire() {
 
-  iterations++;
-  int sum = sumBoard();
-  // update board if it gets stuck in the same 3 iterations over and over
-  average += sum;
-  if (iterations >= 100) {
-    iterations = 0;
-    average = average / 100;
-    if (average == previousAverage) {
-      resetBoard();
-    }
-    previousAverage = average;
-  }
-
-
-  // update board if it gets stuck
-  if (sum == previousSum) {
-    sum_count++;
-  }
-  previousSum = sum;
-
-
-  // if the board has not changed, set random points until it changes
-  if (sum_count >= MAX_ITERATIONS) {
-    resetBoard();
-  }
 
   // create a new board
   int nextBoard[MAX_Y][MAX_X] = {
@@ -149,6 +129,8 @@ void forestFire() {
         An empty space fills with a tree with probability   p
   */
 
+  // # TODO ALMOST always getting TREE
+
   // calculate the state of the next board
   for (int y = 0; y < MAX_Y; y++) {
     for (int x = 0; x < MAX_X; x++) {
@@ -156,37 +138,51 @@ void forestFire() {
       // A burning cell turns into an empty cell
       if (board[y][x] == BURNING) {
         nextBoard[y][x] = EMPTY;
+        if (DEBUG) Serial.println("BURNING --> EMPTY");
       }
 
       // Any dead cell with three live neighbours becomes a live cell.
       else if (board[y][x] == TREE) {
-        // TODO  if any cell neighbor is on fire
-        int onFire = neighborsOnFire(y, x); // --> INSTEAD make similar method is on fire
+        // if any cell neighbor is on fire
+        int onFire = neighborsOnFire(y, x);
         if (onFire) {
           nextBoard[y][x] = BURNING;
+          if (DEBUG) Serial.println("TREE --> BURNING");
         }
         else if (spontaneouslyCombust()) {
           // ignite tree with a probability
           nextBoard[y][x] = BURNING;
+          if (DEBUG) Serial.println("TREE --> BURNING - SPONT");
+        }
+        else {
+          if (DEBUG) Serial.println("TREE --> TREE");
+          nextBoard[y][x] = board[y][x];
         }
       }
 
       // All other live cells die in the next generation. Similarly, all other dead cells stay dead.
-      else if (board[y][x] == EMPTY && plantTree()) {
+      else if (board[y][x] == EMPTY) {
         // plant tree with probability
-        nextBoard[y][x] = TREE;
+        if (plantTree()) {
+          nextBoard[y][x] = TREE;
+          if (DEBUG) Serial.println("EMPTY --> TREE - SPONT");
+        }
+        else {
+          if (DEBUG) Serial.println("EMPTY --> EMPTY");
+          nextBoard[y][x] = board[y][x];
+        }
       }
     }
   }
   // update the board
-  copyBoard(nextBoard, board);
+    copyBoard(nextBoard, board);
 }
 
 
 // return true if we should plant a tree
 int plantTree() {
-  int p = random(0, 4);
-  if (p < 2) {
+  int p = random(0, 100);
+  if (p < 1) {
     return 1;
   }
   return 0;
@@ -194,8 +190,8 @@ int plantTree() {
 
 // return true if the tree should burst into flames
 int spontaneouslyCombust() {
-  int p = random(0, 4);
-  if (p < 2) {
+  int p = random(0, 100);
+  if (p < 1) {
     return 1;
   }
   return 0;
@@ -247,8 +243,31 @@ int neighborsOnFire(int y, int x) {
 void displayBoard(int the_board[MAX_Y][MAX_X]) {
   for (int y = 0; y < MAX_Y; y++) {
     for (int x = 0; x < MAX_X; x++) {
-      mx.setPoint(y, x, the_board[y][x]);
+      // if burning flash the led
+      if (the_board[y][x] == BURNING) {
+        flashIndividualLED(y, x, 4);
+        mx.setPoint(y, x, 0);
+      }
+      // empty turn off LED
+      else if (the_board[y][x] == EMPTY) {
+        mx.setPoint(y, x, 0);
+      }
+      // TREE, turn on led
+      else if (the_board[y][x] == TREE) {
+        mx.setPoint(y, x, 1);
+      }
     }
+  }
+}
+
+// flash individual LED
+void flashIndividualLED(int y, int x, int repeat) {
+  int delayTime = 80;
+  for (int i = 0; i < repeat; i++) {
+    mx.setPoint(y, x, 0);
+    delay(delayTime);
+    mx.setPoint(y, x, 1);
+    delay(delayTime);
   }
 }
 
@@ -303,13 +322,13 @@ void setBoardOutline(int board[MAX_Y][MAX_X]) {
   }
 }
 
-void random_init_board(int board[MAX_Y][MAX_X], int num_points) {
+void random_init_board(int board[MAX_Y][MAX_X], int num_points, int state) {
   int x = 0;
   int y = 0;
   for (int i = 0; i < num_points; i++) {
     y = random(0, MAX_Y);
     x = random(0, MAX_X);
-    board[y][x] = 1;
+    board[y][x] = state;
   }
 }
 
