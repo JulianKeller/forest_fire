@@ -21,8 +21,9 @@
 
 // cell states
 #define EMPTY 0
-#define BURNING 1
-#define TREE 2
+#define TREE 1
+#define BURNING 2
+
 
 
 int hasChanged = 1;
@@ -75,13 +76,16 @@ void setup() {
   // get noise as long as analog 1 is not in use
   randomSeed(analogRead(1));
 
-  //  initBoard(board, 1);
-  int totalGridSize = MAX_X * MAX_Y;
-  int treesToPlant = totalGridSize / 4;
-  random_init_board(board, treesToPlant, TREE);
+  //    initBoard(board, 1);
+  //  int totalGridSize = MAX_X * MAX_Y;
+  random_init_board(board, 3, TREE);
   displayBoard(board);
-  //  set_random_point_near_neighbor(TREE, 3);
-  delay(1500);
+  delay(800);
+
+  set_random_point_near_neighbor(TREE, 100);
+  displayBoard(board);
+
+  delay(800);
   flashBoard(3);
 
 }
@@ -94,7 +98,7 @@ void loop() {
   //  delay(val);
 
   // enable for hard coded speed
-  delay(80);
+  //  delay(80);
   if (DEBUG) printBoard();
   displayBoard(board);
   forestFire();
@@ -129,8 +133,6 @@ void forestFire() {
         An empty space fills with a tree with probability   p
   */
 
-  // # TODO ALMOST always getting TREE
-
   // calculate the state of the next board
   for (int y = 0; y < MAX_Y; y++) {
     for (int x = 0; x < MAX_X; x++) {
@@ -138,26 +140,21 @@ void forestFire() {
       // A burning cell turns into an empty cell
       if (board[y][x] == BURNING) {
         nextBoard[y][x] = EMPTY;
-        if (DEBUG) Serial.println("BURNING --> EMPTY");
       }
 
       // Any dead cell with three live neighbours becomes a live cell.
       else if (board[y][x] == TREE) {
         // if any cell neighbor is on fire
         int onFire = neighborsOnFire(y, x);
-        Serial.print("onFire ---> ");
-        Serial.println(onFire);
         if (onFire) {
           nextBoard[y][x] = BURNING;
-          if (DEBUG) Serial.println("TREE --> BURNING");
         }
         else if (spontaneouslyCombust()) {
           // ignite tree with a probability
           nextBoard[y][x] = BURNING;
-          if (DEBUG) Serial.println("TREE --> BURNING - SPONT");
         }
+        // keep the same state
         else {
-          if (DEBUG) Serial.println("TREE --> TREE");
           nextBoard[y][x] = board[y][x];
         }
       }
@@ -167,10 +164,8 @@ void forestFire() {
         // plant tree with probability
         if (plantTree()) {
           nextBoard[y][x] = TREE;
-          if (DEBUG) Serial.println("EMPTY --> TREE - SPONT");
         }
         else {
-          if (DEBUG) Serial.println("EMPTY --> EMPTY");
           nextBoard[y][x] = board[y][x];
         }
       }
@@ -183,8 +178,7 @@ void forestFire() {
 
 // return true if we should plant a tree
 int plantTree() {
-  int p = random(0, 100);
-  if (p < 1) {
+  if (random(0, 500) < 1) {
     return 1;
   }
   return 0;
@@ -192,8 +186,7 @@ int plantTree() {
 
 // return true if the tree should burst into flames
 int spontaneouslyCombust() {
-  int p = random(0, 100);
-  if (p < 1) {
+  if (random(0, 2000) < 1) {
     return 1;
   }
   return 0;
@@ -246,7 +239,7 @@ void displayBoard(int the_board[MAX_Y][MAX_X]) {
     for (int x = 0; x < MAX_X; x++) {
       // if burning flash the led
       if (the_board[y][x] == BURNING) {
-        flashIndividualLED(y, x, 4);
+        flashIndividualLED(y, x, 1);
         mx.setPoint(y, x, 0);
       }
       // empty turn off LED
@@ -263,7 +256,7 @@ void displayBoard(int the_board[MAX_Y][MAX_X]) {
 
 // flash individual LED
 void flashIndividualLED(int y, int x, int repeat) {
-  int delayTime = 80;
+  int delayTime = 30;
   for (int i = 0; i < repeat; i++) {
     mx.setPoint(y, x, 0);
     delay(delayTime);
@@ -343,39 +336,47 @@ void randomDisplay() {
 
 
 // repeate should be greater than the number of points to set
+// this makes some clusters
 void set_random_point_near_neighbor(int state, int repeat) {
   int x = 0;
   int y = 0;
-  int points = 4;
-
-  int sum = sumBoard();
-
-  // set a couple of random points if board is empty
-  if (sum == 0) {
-    for (int i = 0; i < points; i++) {
-      y = random(0, MAX_Y);
-      x = random(0, MAX_X);
-      board[y][x] = state;
-      mx.setPoint(y, x, state);
-    }
-    sum = points;
-  }
 
   // set points only near neighbors
   int i = 0;
   int neighbors = 0;
-  while (i < points * repeat) {
+  while (i < repeat) {
     y = random(0, MAX_Y);
     x = random(0, MAX_X);
-    if (neighborsOnFire(y, x) > 0) {
+    if (countNeighbors(y, x) > 0) {
       board[y][x] = state;
       mx.setPoint(y, x, state);
       i++;
+      // optionally display the board as it generates clusters
+      displayBoard(board);
       delay(50);
     }
 
   }
+
 }
+
+
+int countNeighbors(int y, int x) {
+  int count = 0;
+  // perp and vertical
+  for (int j = -1; j < 2; j++) {
+    for (int i = -1; i < 2; i++) {
+      // don't count self
+      if (i == 0 && j == 0) continue;
+      // else count everything in bounds
+      if ((y + j >= 0) && (y + j < MAX_Y) && (x + i >= 0) && (x + i < MAX_X)) {
+        count += board[y + j][x + i];
+      }
+    }
+  }
+  return count;
+}
+
 
 void set_random_point(int state, int repeat) {
   int x = 0;
